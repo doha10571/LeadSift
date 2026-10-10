@@ -1,0 +1,417 @@
+{
+  "name": "LeadSift",
+  "nodes": [
+    {
+      "parameters": {
+        "formId": "YOUR_TALLY_FORM_ID"
+      },
+      "type": "n8n-nodes-tallyforms.tallyTrigger",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        0
+      ],
+      "id": "09e14919-0950-4c5e-a9be-6b65172bbfe5",
+      "name": "Tally Trigger",
+      "webhookId": "6a51a60e-d521-4394-94cc-59f5884f2bea",
+      "credentials": {
+        "tallyApi": {
+          "id": "AXYM2TZhXrvPgpQX",
+          "name": "Tally account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a lead qualification data extraction assistant.\n\nAnalyze the customer's brief and extract structured qualification information.\n\nReturn ONLY valid JSON.\nDo not add explanations.\nDo not use markdown.\nDo not use null.\nDo not change the field names.\n\nUse exactly this structure:\n\n{\n  \"need\": \"not provided\",\n  \"pain_point\": \"not provided\",\n  \"budget\": \"not provided\",\n  \"timeline\": \"not provided\",\n  \"authority\": \"unknown\",\n  \"urgency\": \"unknown\",\n  \"purchase_intent\": \"unknown\"\n}\n\nRules:\n\n- need: describe the customer's requested solution.\n- pain_point: describe the customer's main problem.\n- budget: extract the budget exactly as mentioned, or \"not provided\".\n- timeline: extract the expected implementation time, or \"not provided\".\n- authority must be exactly one of:\n  \"decision_maker\"\n  \"influencer\"\n  \"unknown\"\n\n- urgency must be exactly one of:\n  \"high\"\n  \"medium\"\n  \"low\"\n  \"unknown\"\n\n- purchase_intent must be exactly one of:\n  \"high\"\n  \"medium\"\n  \"low\"\n  \"unknown\"\n\nCustomer Brief:\n{{ $json.question_4obAkX.value }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": []
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        176,
+        0
+      ],
+      "id": "b72f5018-ff91-4a50-9b37-241579e310df",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        320,
+        352
+      ],
+      "id": "cc28eb38-c7e8-466d-98ba-3ae5152267e9",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"need\": \"AI chatbot for website\",\n  \"pain_point\": \"Answer customer questions\",\n  \"budget\": \"not provided\",\n  \"timeline\": \"3 months\",\n  \"authority\": \"influencer\",\n  \"urgency\": \"low\",\n  \"purchase_intent\": \"medium\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        528,
+        352
+      ],
+      "id": "eff4d5ce-3779-4184-bf1b-21b178a4c2d0",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get structured data from LLM\nconst data = $json.output;\n\n// Get original Tally submission\nconst tally = $('Tally Trigger').first().json;\n\n// Function to get answer by question label\nfunction getAnswer(label) {\n  const key = Object.keys(tally).find(\n    key => tally[key]?.label === label\n  );\n\n  return key ? tally[key].value : \"not provided\";\n}\n\n// Get customer information\nconst name = getAnswer(\"Name\");\nconst email = getAnswer(\"Email\");\nconst phone = getAnswer(\"Phone\");\nconst brief = getAnswer(\"Brief\");\n\n// Calculate lead score\nlet score = 0;\n\n// Need\nif (data.need && data.need !== \"not provided\") {\n  score += 25;\n}\n\n// Timeline\nif (data.timeline && data.timeline !== \"not provided\") {\n  score += 20;\n}\n\n// Budget\nif (data.budget && data.budget !== \"not provided\") {\n  score += 20;\n}\n\n// Authority\nif (data.authority === \"decision_maker\") {\n  score += 15;\n} else if (data.authority === \"influencer\") {\n  score += 8;\n}\n\n// Urgency\nif (data.urgency === \"high\") {\n  score += 10;\n} else if (data.urgency === \"medium\") {\n  score += 5;\n}\n\n// Purchase Intent\nif (data.purchase_intent === \"high\") {\n  score += 10;\n} else if (data.purchase_intent === \"medium\") {\n  score += 5;\n}\n\n// Classify lead\nlet classification;\n\nif (score >= 80) {\n  classification = \"HOT\";\n} else if (score >= 50) {\n  classification = \"WARM\";\n} else {\n  classification = \"COLD\";\n}\n\n// Final output\nreturn [\n  {\n    json: {\n      name,\n      email,\n      phone,\n      brief,\n\n      need: data.need,\n      pain_point: data.pain_point,\n      budget: data.budget,\n      timeline: data.timeline,\n      authority: data.authority,\n      urgency: data.urgency,\n      purchase_intent: data.purchase_intent,\n\n      score,\n      classification\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        0
+      ],
+      "id": "719612f0-d3ee-41fa-97ba-26e20c8d2e28",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Customer Information",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $json.name }}",
+            "Email": "={{ $json.email }}",
+            "Phone": "={{ $json.phone }}",
+            "Brief": "={{ $json.brief }}",
+            "Need": "={{ $json.need }}",
+            "Problem": "={{ $json.pain_point }}",
+            "Budget": "={{ $json.budget }}",
+            "Timeline": "={{ $json.timeline }}",
+            "Authority": "={{ $json.authority }}",
+            "Urgency": "={{ $json.urgency }}",
+            "Purchase Intent": "={{ $json.purchase_intent }}",
+            "Score": "={{ $json.score }}",
+            "Status": "={{ $json.classification }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Brief",
+              "displayName": "Brief",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Need",
+              "displayName": "Need",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Problem",
+              "displayName": "Problem",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Budget",
+              "displayName": "Budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Timeline",
+              "displayName": "Timeline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Authority",
+              "displayName": "Authority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Urgency",
+              "displayName": "Urgency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Purchase Intent",
+              "displayName": "Purchase Intent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Score",
+              "displayName": "Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        752,
+        0
+      ],
+      "id": "5de1241f-039e-4261-a8fe-1ddebfb1360b",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "O7WLzQCAuPMc8rWr",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "97cb781d-825a-4b3f-8c98-050c2eeacdf3",
+              "leftValue": "={{ $json.Status }}",
+              "rightValue": "HOT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        928,
+        16
+      ],
+      "id": "e28ed80a-6915-4bec-a799-848a82505ebc",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "sendTo": "your-email@example.com",
+        "subject": "We received your request – Our team will contact you",
+        "emailType": "text",
+        "message": "=Hi {{ $json[\"Name\"] }} ,  \nThank you for contacting us. \n\nWe received your request regarding: {{ $json[\"Need\"] }}. \nYour main challenge is:{{ $json[\"Problem\"] }}  .\nOur team will review your requirements and contact you shortly to discuss the next steps.\n\nBest regards,\nSales Team",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1216,
+        16
+      ],
+      "id": "3b1aeeda-f889-4d30-b9c6-9e8f022f36e4",
+      "name": "Send a message",
+      "webhookId": "bc69933b-5100-4105-bcaa-5d34950a2c5c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "HCFSWIQ8ZxmGX7no",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Tally Trigger": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6c90c0d5-d7b0-4715-b03f-120ac1e8d3b4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8fbb030609fff4e1e07686cbc3b452e5a2745bce52df286b9272113796fedcaf"
+  },
+  "nodeGroups": [],
+  "id": "nKOhO0gHW3hJqVp2",
+  "tags": []
+}
