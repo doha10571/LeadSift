@@ -2,6 +2,8 @@
 
 An **n8n** workflow that qualifies incoming leads automatically: it reads a form submission, uses **Google Gemini** to extract qualification data, scores the lead, logs it to **Google Sheets**, and emails a follow-up for hot leads.
 
+![LeadSift n8n workflow](workflow_lead.png)
+
 ## How it works
 
 1. **Tally Trigger** — a lead submits the form (Name, Email, Phone, Brief).
